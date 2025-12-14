@@ -1,35 +1,170 @@
 #include "demo.h"
 
 #include <cstdint>
+#include <vector>
 
 namespace
 {
+struct Node
+{
+    Node *parent;
+    std::vector<Node *> neighbours;
+
+    bool isObstacle = false;
+    bool wasVisited = false;
+
+    float globalGoal;
+    float localGoal;
+
+    int x;
+    int y;
+};
+
+Node *nodes = nullptr;
+Node *begin = nullptr;
+Node *finish = nullptr;
+
+int tilesWidth = 32;
+int tilesHeight = 18;
+
 uint32_t roundFloatToUint32(float);
 
 void drawRectangle(demo::OffscreenBuffer *,
-                   float fMinX,
-                   float fMinY,
-                   float fMaxX,
-                   float fMaxY,
-                   float r,
-                   float g,
-                   float b);
+                   int32_t minX,
+                   int32_t minY,
+                   int32_t maxX,
+                   int32_t maxY,
+                   uint32_t color);
 } // namespace
 
 namespace demo
 {
 void initialize(void)
-{}
-void updateAndRender(Input *, OffscreenBuffer *buffer)
 {
-    drawRectangle(buffer,
-                  0.0f,
-                  0.0f,
-                  (float)buffer->width,
-                  (float)buffer->height,
-                  1.0f,
-                  0.0f,
-                  1.0f);
+    nodes = new Node[tilesWidth * tilesHeight];
+    for (int x = 0; x < tilesWidth; x++)
+    {
+        for (int y = 0; y < tilesHeight; y++)
+        {
+            int pitch = y * tilesWidth;
+            int nodeIndex = pitch + x;
+
+            nodes[nodeIndex].x = x;
+            nodes[nodeIndex].y = y;
+
+            nodes[nodeIndex].isObstacle = false;
+            nodes[nodeIndex].wasVisited = false;
+
+            nodes[nodeIndex].parent = nullptr;
+        }
+    }
+
+    for (int x = 0; x < tilesWidth; x++)
+    {
+        for (int y = 0; y < tilesHeight; y++)
+        {
+            int pitch = y * tilesWidth;
+            int nodeIndex = pitch + x;
+
+            if (y > 0)
+            {
+                nodes[nodeIndex].neighbours.push_back(&nodes[(y - 1) * tilesWidth + x]);
+            }
+            if (y < tilesHeight - 1)
+            {
+                nodes[nodeIndex].neighbours.push_back(&nodes[(y + 1) * tilesWidth + x]);
+            }
+            if (x > 0)
+            {
+                nodes[nodeIndex].neighbours.push_back(&nodes[y * tilesWidth + (x - 1)]);
+            }
+            if (x < tilesWidth - 1)
+            {
+                nodes[nodeIndex].neighbours.push_back(&nodes[y * tilesWidth + (x + 1)]);
+            }
+        }
+    }
+
+    begin = &nodes[(tilesHeight / 2) * tilesWidth + 2];
+    finish = &nodes[(tilesHeight / 2) * tilesWidth + tilesWidth - 2];
+}
+
+void updateAndRender(Input *input, OffscreenBuffer *buffer)
+{
+    int nNodeSize = 30;
+    int nNodeBorder = 5;
+
+    // @todo: Mouse coordinates are weird, investigate!!!!
+    int selectedX = input->mouse.x / 60;
+    int selectedY = input->mouse.y / 55;
+
+    bool wasMouseLeftButtonReleased = ((!input->keyboard.mouseL.endedDown)
+                                       && (input->keyboard.mouseL.halfTransitionCount == 1));
+    if (wasMouseLeftButtonReleased)
+    {
+        if (selectedX >= 0 && selectedX < tilesWidth)
+        {
+            if (selectedY >= 0 && selectedY < tilesHeight)
+            {
+                int pitch = selectedY * tilesWidth;
+                int nodeIndex = pitch + selectedX;
+
+                if (input->keyboard.ctrl.endedDown)
+                {
+                    finish = &nodes[nodeIndex];
+                }
+                else if (input->keyboard.shift.endedDown)
+                {
+                    begin = &nodes[nodeIndex];
+                }
+                else
+                {
+                    nodes[nodeIndex].isObstacle = !nodes[nodeIndex].isObstacle;
+                }
+            }
+        }
+    }
+
+    drawRectangle(buffer, 0, 0, buffer->width, buffer->height, 0);
+
+    uint32_t blueDark = 0x00000077;
+    uint32_t blue = 0x000000FF;
+    uint32_t grey = 0x00777777;
+    uint32_t red = 0x00FF0000;
+    uint32_t green = 0x0000FF00;
+    // uint32_t yellow = 0x00FFFF00;
+
+    for (int x = 0; x < tilesWidth; x++)
+    {
+        for (int y = 0; y < tilesHeight; y++)
+        {
+            int pitch = y * tilesWidth;
+            int nodeIndex = pitch + x;
+
+            int minX = x * nNodeSize + nNodeBorder;
+            int minY = y * nNodeSize + nNodeBorder;
+            int maxX = (x + 1) * nNodeSize - nNodeBorder;
+            int maxY = (y + 1) * nNodeSize - nNodeBorder;
+
+            bool isObstacle = nodes[nodeIndex].isObstacle;
+            drawRectangle(buffer, minX, minY, maxX, maxY, isObstacle ? grey : blueDark);
+
+            if (nodes[nodeIndex].wasVisited)
+            {
+                drawRectangle(buffer, minX, minY, maxX, maxY, blue);
+            }
+
+            if (&nodes[nodeIndex] == begin)
+            {
+                drawRectangle(buffer, minX, minY, maxX, maxY, green);
+            }
+
+            if (&nodes[nodeIndex] == finish)
+            {
+                drawRectangle(buffer, minX, minY, maxX, maxY, red);
+            }
+        }
+    }
 }
 } // namespace demo
 
@@ -42,19 +177,12 @@ uint32_t roundFloatToUint32(float value)
 }
 
 void drawRectangle(demo::OffscreenBuffer *buffer,
-                   float fMinX,
-                   float fMinY,
-                   float fMaxX,
-                   float fMaxY,
-                   float r,
-                   float g,
-                   float b)
+                   int32_t minX,
+                   int32_t minY,
+                   int32_t maxX,
+                   int32_t maxY,
+                   uint32_t color)
 {
-    int32_t minX = roundFloatToUint32(fMinX);
-    int32_t minY = roundFloatToUint32(fMinY);
-    int32_t maxX = roundFloatToUint32(fMaxX);
-    int32_t maxY = roundFloatToUint32(fMaxY);
-
     if (minX < 0)
     {
         minX = 0;
@@ -75,16 +203,12 @@ void drawRectangle(demo::OffscreenBuffer *buffer,
         maxY = buffer->height;
     }
 
-    uint32_t color = ((roundFloatToUint32(r * 255.0f) << 16)
-                      | (roundFloatToUint32(g * 255.0f) << 8)
-                      | (roundFloatToUint32(b * 255.0f) << 0));
-
     uint8_t *row
         = ((uint8_t *)buffer->memory + minX * buffer->bytesPerPixel + minY * buffer->pitch);
-    for (int Y = minY; Y < maxY; ++Y)
+    for (int y = minY; y < maxY; ++y)
     {
         uint32_t *pixel = (uint32_t *)row;
-        for (int X = minX; X < maxX; ++X)
+        for (int x = minX; x < maxX; ++x)
         {
             *pixel++ = color;
         }
