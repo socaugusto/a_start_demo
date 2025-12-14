@@ -4,6 +4,7 @@ project(a_start_demo VERSION 0.1.0 LANGUAGES C CXX)
 add_executable(astar_demo WIN32
     src/win32_platform.cpp
     src/demo.cpp
+    src/astar.cpp
 )
 
 target_compile_options(astar_demo

@@ -1,28 +1,15 @@
 #include "demo.h"
 
+#include "astar.h"
+
 #include <cstdint>
 #include <vector>
 
 namespace
 {
-struct Node
-{
-    Node *parent;
-    std::vector<Node *> neighbours;
-
-    bool isObstacle = false;
-    bool wasVisited = false;
-
-    float globalGoal;
-    float localGoal;
-
-    int x;
-    int y;
-};
-
-Node *nodes = nullptr;
-Node *begin = nullptr;
-Node *finish = nullptr;
+astar::Node *nodes = nullptr;
+astar::Node *begin = nullptr;
+astar::Node *finish = nullptr;
 
 int tilesWidth = 32;
 int tilesHeight = 18;
@@ -41,7 +28,7 @@ namespace demo
 {
 void initialize(void)
 {
-    nodes = new Node[tilesWidth * tilesHeight];
+    nodes = new astar::Node[tilesWidth * tilesHeight];
     for (int x = 0; x < tilesWidth; x++)
     {
         for (int y = 0; y < tilesHeight; y++)
@@ -121,6 +108,13 @@ void updateAndRender(Input *input, OffscreenBuffer *buffer)
                 {
                     nodes[nodeIndex].isObstacle = !nodes[nodeIndex].isObstacle;
                 }
+
+                astar::Input data{};
+                data.begin = begin;
+                data.finish = finish;
+                data.nodeVector = nodes;
+                data.numberOfNodes = tilesWidth * tilesHeight;
+                astar::solve(data);
             }
         }
     }
@@ -132,7 +126,7 @@ void updateAndRender(Input *input, OffscreenBuffer *buffer)
     uint32_t grey = 0x00777777;
     uint32_t red = 0x00FF0000;
     uint32_t green = 0x0000FF00;
-    // uint32_t yellow = 0x00FFFF00;
+    uint32_t yellow = 0x00FFFF00;
 
     for (int x = 0; x < tilesWidth; x++)
     {
@@ -163,6 +157,22 @@ void updateAndRender(Input *input, OffscreenBuffer *buffer)
             {
                 drawRectangle(buffer, minX, minY, maxX, maxY, red);
             }
+        }
+    }
+
+    if (finish != nullptr)
+    {
+        astar::Node *p = finish;
+        while (p->parent != nullptr && p->parent != begin)
+        {
+            drawRectangle(buffer,
+                          p->parent->x * nNodeSize + nNodeBorder,
+                          p->parent->y * nNodeSize + nNodeBorder,
+                          (p->parent->x + 1) * nNodeSize - nNodeBorder,
+                          (p->parent->y + 1) * nNodeSize - nNodeBorder,
+                          yellow);
+
+            p = p->parent;
         }
     }
 }
