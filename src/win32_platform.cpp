@@ -1,5 +1,7 @@
 #include "win32_platform.h"
 
+#include "demo.h"
+
 namespace
 {
 win32::OffscreenBuffer globalBackBuffer;
@@ -12,7 +14,8 @@ void resizeDIBSection(OffscreenBuffer *, int width, int height);
 WindowDimension getWindowDimension(HWND);
 void displayBufferInWindow(OffscreenBuffer *, HDC, int, int);
 LRESULT CALLBACK mainWindowCallback(HWND, UINT, WPARAM, LPARAM);
-void processPendingMessages(void);
+void processPendingMessages(demo::ControlInput *);
+void processKeyboardMessage(demo::ButtonState *, bool);
 } // namespace win32
 
 // https://learn.microsoft.com/en-us/windows/win32/learnwin32/your-first-windows-program
@@ -47,10 +50,42 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE, LPSTR, int)
         if (window)
         {
             globalRunning = true;
+            demo::Input input[2]{};
+            demo::Input *newInput = &input[0];
+            demo::Input *oldInput = &input[1];
+
+            demo::initialize();
 
             while (globalRunning)
             {
-                win32::processPendingMessages();
+                demo::ControlInput *oldKeyboardController = &oldInput->keyboard;
+                demo::ControlInput *newKeyboardController = &newInput->keyboard;
+                *newKeyboardController = {};
+                for (int buttonIndex = 0; buttonIndex < arrayCount(newKeyboardController->buttons);
+                     ++buttonIndex)
+                {
+                    newKeyboardController->buttons[buttonIndex].endedDown
+                        = oldKeyboardController->buttons[buttonIndex].endedDown;
+                }
+
+                win32::processPendingMessages(newKeyboardController);
+
+                POINT mouseP;
+                GetCursorPos(&mouseP);
+                ScreenToClient(window, &mouseP);
+
+                newInput->mouse.x = mouseP.x;
+                newInput->mouse.y = mouseP.y;
+                newInput->mouse.z = 0;
+
+                demo::OffscreenBuffer buffer{};
+                buffer.memory = globalBackBuffer.memory;
+                buffer.width = globalBackBuffer.width;
+                buffer.height = globalBackBuffer.height;
+                buffer.pitch = globalBackBuffer.pitch;
+                buffer.bytesPerPixel = globalBackBuffer.bytesPerPixel;
+
+                demo::updateAndRender(newInput, &buffer);
 
                 win32::WindowDimension dimension = win32::getWindowDimension(window);
 
@@ -60,6 +95,10 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE, LPSTR, int)
                                              dimension.width,
                                              dimension.height);
                 ReleaseDC(window, deviceContext);
+
+                demo::Input *temp = newInput;
+                newInput = oldInput;
+                oldInput = temp;
             }
         }
         else
@@ -174,7 +213,16 @@ LRESULT CALLBACK mainWindowCallback(HWND window, UINT message, WPARAM wParam, LP
     return Result;
 }
 
-void processPendingMessages(void)
+void processKeyboardMessage(demo::ButtonState *newState, bool isDown)
+{
+    if (newState->endedDown != isDown)
+    {
+        newState->endedDown = isDown;
+        ++newState->halfTransitionCount;
+    }
+}
+
+void processPendingMessages(demo::ControlInput *keyboardController)
 {
     // https://learn.microsoft.com/en-us/windows/win32/learnwin32/window-messages
     MSG message;
@@ -192,8 +240,42 @@ void processPendingMessages(void)
         case WM_SYSKEYUP:
         case WM_KEYDOWN:
         case WM_KEYUP:
-            break;
+        {
+            unsigned int vKCode = (unsigned int)message.wParam;
+            bool wasDown = ((message.lParam & (1 << 30)) != 0);
+            bool isDown = ((message.lParam & (1 << 31)) == 0);
 
+            if (wasDown != isDown)
+            {
+                if (vKCode == VK_CONTROL)
+                {
+                    processKeyboardMessage(&keyboardController->ctrl, isDown);
+                }
+                else if (vKCode == VK_SHIFT)
+                {
+                    processKeyboardMessage(&keyboardController->shift, isDown);
+                }
+            }
+
+            // ALT+F4 closes window
+            // https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-syskeyup
+            bool altKeyWasDown = (message.lParam & (1 << 29));
+            if ((vKCode == VK_F4) && altKeyWasDown)
+            {
+                globalRunning = false;
+            }
+
+            break;
+        }
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        {
+            unsigned int mKCode = (unsigned int)message.wParam;
+            bool isDown = (mKCode & MK_LBUTTON);
+            win32::processKeyboardMessage(&keyboardController->mouseL, isDown);
+
+            break;
+        }
         default:
         {
             TranslateMessage(&message);

@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 
+#define arrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 namespace win32
 {
 struct OffscreenBuffer
