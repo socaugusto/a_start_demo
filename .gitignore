@@ -39,3 +39,11 @@
 
 # debug information files
 *.dwo
+
+# Directories used by CMake
+build/
+out/
+
+# Directories used by IDE
+.vs/
+.vscode/
