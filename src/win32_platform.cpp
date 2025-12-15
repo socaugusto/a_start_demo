@@ -74,8 +74,17 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE, LPSTR, int)
                 GetCursorPos(&mouseP);
                 ScreenToClient(window, &mouseP);
 
-                newInput->mouse.x = mouseP.x;
-                newInput->mouse.y = mouseP.y;
+                win32::WindowDimension dimension = win32::getWindowDimension(window);
+                if (dimension.width > 0 && dimension.height > 0)
+                {
+                    newInput->mouse.x = (mouseP.x * globalBackBuffer.width) / dimension.width;
+                    newInput->mouse.y = (mouseP.y * globalBackBuffer.height) / dimension.height;
+                }
+                else
+                {
+                    newInput->mouse.x = mouseP.x;
+                    newInput->mouse.y = mouseP.y;
+                }
                 newInput->mouse.z = 0;
 
                 demo::OffscreenBuffer buffer{};
@@ -87,7 +96,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE, LPSTR, int)
 
                 demo::updateAndRender(newInput, &buffer);
 
-                win32::WindowDimension dimension = win32::getWindowDimension(window);
+                dimension = win32::getWindowDimension(window);
 
                 HDC deviceContext = GetDC(window);
                 win32::displayBufferInWindow(&globalBackBuffer,
