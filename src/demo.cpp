@@ -81,9 +81,8 @@ void updateAndRender(Input *input, OffscreenBuffer *buffer)
     int nNodeSize = 30;
     int nNodeBorder = 5;
 
-    // @todo: Mouse coordinates are weird, investigate!!!!
-    int selectedX = input->mouse.x / 60;
-    int selectedY = input->mouse.y / 55;
+    int selectedX = input->mouse.x / nNodeSize;
+    int selectedY = input->mouse.y / nNodeSize;
 
     bool wasMouseLeftButtonReleased = ((!input->keyboard.mouseL.endedDown)
                                        && (input->keyboard.mouseL.halfTransitionCount == 1));
